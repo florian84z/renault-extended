@@ -1,0 +1,7 @@
+{
+  "name": "Renault Extended",
+  "description": "Erweiterte Renault MyRenault Integration für Home Assistant – Ladehistorie, Reifendruck, GPS, Türstatus und mehr.",
+  "render_readme": true,
+  "homeassistant": "2023.1.0",
+  "domains": ["sensor", "binary_sensor", "device_tracker"]
+}

@@ -1,0 +1,12 @@
+{
+  "domain": "renault_extended",
+  "name": "Renault Extended",
+  "version": "1.0.0",
+  "documentation": "https://github.com/yourusername/renault-extended-ha",
+  "issue_tracker": "https://github.com/yourusername/renault-extended-ha/issues",
+  "dependencies": [],
+  "codeowners": [],
+  "requirements": ["renault-api==0.5.7"],
+  "iot_class": "cloud_polling",
+  "config_flow": true
+}

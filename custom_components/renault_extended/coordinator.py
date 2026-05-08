@@ -30,9 +30,9 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
     """
     Koordiniert alle API-Aufrufe an die Renault Kamereon API.
     Teilt die Endpunkte in drei Gruppen mit unterschiedlichen Poll-Intervallen:
-      - realtime:  alle 5 min  (Akku, Laden, GPS, Türen, HVAC)
+      - realtime:  alle 5 min  (Akku, Laden, GPS, HVAC)
       - history:   alle 6 h    (Ladehistorie, Kilometerstand)
-      - static:    alle 24 h   (Reifendruck, Res-State)
+      - static:    alle 24 h   (Reifendruck, Res-State, Lock)
     """
 
     def __init__(
@@ -66,17 +66,14 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
         self._last_history_update: datetime | None = None
         self._last_static_update: datetime | None = None
 
-        # Gecachte Daten für langsame Endpunkte
         self._history_data: dict[str, Any] = {}
         self._static_data: dict[str, Any] = {}
 
     # ── Login / Fahrzeug-Handle ───────────────────────────────────────────────
 
     async def _ensure_vehicle(self) -> RenaultVehicle:
-        """Login und Fahrzeug-Handle cachen."""
         if self._vehicle is not None:
             return self._vehicle
-
         websession = async_get_clientsession(self.hass)
         self._client = RenaultClient(websession=websession, locale=self._locale)
         await self._client.session.login(self._username, self._password)
@@ -85,11 +82,8 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
         log.info("Renault Extended: Verbunden mit Fahrzeug %s", self._vin)
         return self._vehicle
 
-    # ── Hilfsmethoden ─────────────────────────────────────────────────────────
-
     @staticmethod
     def _safe_get(obj: Any, *attrs: str, default: Any = None) -> Any:
-        """Sicherer Attributzugriff durch verschachtelte Objekte."""
         current = obj
         for attr in attrs:
             if current is None:
@@ -114,17 +108,16 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
     async def _fetch_battery_status(self, vehicle: RenaultVehicle) -> dict[str, Any]:
         try:
             data = await vehicle.get_battery_status()
-            attrs = data.raw_data.get("attributes", {}) if hasattr(data, "raw_data") else {}
             return {
-                "battery_level":              self._safe_get(data, "batteryLevel"),
-                "battery_temperature":        self._safe_get(data, "batteryTemperature"),
-                "battery_autonomy_km":        self._safe_get(data, "batteryAutonomy"),
-                "battery_available_energy":   self._safe_get(data, "batteryAvailableEnergy"),
-                "plug_status":                self._safe_get(data, "plugStatus"),
-                "charging_status":            self._safe_get(data, "chargingStatus"),
-                "charging_remaining_time":    self._safe_get(data, "chargingRemainingTime"),
-                "charging_instant_power":     self._safe_get(data, "chargingInstantaneousPower"),
-                "timestamp":                  self._safe_get(data, "timestamp"),
+                "battery_level":           self._safe_get(data, "batteryLevel"),
+                "battery_temperature":     self._safe_get(data, "batteryTemperature"),
+                "battery_autonomy_km":     self._safe_get(data, "batteryAutonomy"),
+                "battery_available_energy": self._safe_get(data, "batteryAvailableEnergy"),
+                "plug_status":             self._safe_get(data, "plugStatus"),
+                "charging_status":         self._safe_get(data, "chargingStatus"),
+                "charging_remaining_time": self._safe_get(data, "chargingRemainingTime"),
+                "charging_instant_power":  self._safe_get(data, "chargingInstantaneousPower"),
+                "timestamp":               self._safe_get(data, "timestamp"),
             }
         except Exception as e:
             log.warning("battery-status fehlgeschlagen: %s", e)
@@ -134,39 +127,23 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
         try:
             data = await vehicle.get_location()
             return {
-                "gps_latitude":    self._safe_get(data, "gpsLatitude"),
-                "gps_longitude":   self._safe_get(data, "gpsLongitude"),
-                "gps_direction":   self._safe_get(data, "gpsDirection"),
+                "gps_latitude":     self._safe_get(data, "gpsLatitude"),
+                "gps_longitude":    self._safe_get(data, "gpsLongitude"),
+                "gps_direction":    self._safe_get(data, "gpsDirection"),
                 "location_updated": self._safe_get(data, "lastUpdateTime"),
             }
         except Exception as e:
             log.warning("location fehlgeschlagen: %s", e)
             return {}
 
-    async def _fetch_lock_status(self, vehicle: RenaultVehicle) -> dict[str, Any]:
-        try:
-            data = await vehicle.get_lock_status()
-            return {
-                "lock_status":            self._safe_get(data, "lockStatus"),
-                "door_driver":            self._safe_get(data, "doorStatusDriver"),
-                "door_passenger":         self._safe_get(data, "doorStatusPassenger"),
-                "door_rear_left":         self._safe_get(data, "doorStatusRearLeft"),
-                "door_rear_right":        self._safe_get(data, "doorStatusRearRight"),
-                "hatch_status":           self._safe_get(data, "hatchStatus"),
-                "lock_updated":           self._safe_get(data, "lastUpdateTime"),
-            }
-        except Exception as e:
-            log.warning("lock-status fehlgeschlagen: %s", e)
-            return {}
-
     async def _fetch_hvac_status(self, vehicle: RenaultVehicle) -> dict[str, Any]:
         try:
             data = await vehicle.get_hvac_status()
             return {
-                "hvac_status":            self._safe_get(data, "hvacStatus"),
-                "external_temperature":   self._safe_get(data, "externalTemperature"),
-                "soc_threshold":          self._safe_get(data, "socThreshold"),
-                "hvac_updated":           self._safe_get(data, "lastUpdateTime"),
+                "hvac_status":          self._safe_get(data, "hvacStatus"),
+                "external_temperature": self._safe_get(data, "externalTemperature"),
+                "soc_threshold":        self._safe_get(data, "socThreshold"),
+                "hvac_updated":         self._safe_get(data, "lastUpdateTime"),
             }
         except Exception as e:
             log.warning("hvac-status fehlgeschlagen: %s", e)
@@ -191,37 +168,31 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
             data  = await vehicle.get_charges(start=start, end=end)
 
             raw_charges = []
-            if hasattr(data, "raw_data"):
-                raw_charges = data.raw_data.get("attributes", {}).get("charges", [])
-            elif hasattr(data, "charges"):
-                charges_attr = data.charges
-                if charges_attr:
-                    raw_charges = [
-                        {
-                            "chargeStartDate":             c.chargeStartDate,
-                            "chargeEndDate":               c.chargeEndDate,
-                            "chargeDuration":              c.chargeDuration,
-                            "chargeStartBatteryLevel":     c.chargeStartBatteryLevel,
-                            "chargeEndBatteryLevel":       c.chargeEndBatteryLevel,
-                            "chargeBatteryLevelRecovered": c.chargeBatteryLevelRecovered,
-                            "chargePower":                 c.chargePower,
-                            "chargeStartInstantaneousPower": c.chargeStartInstantaneousPower,
-                            "chargeEndStatus":             c.chargeEndStatus,
-                        }
-                        for c in charges_attr
-                    ]
+            if hasattr(data, "charges") and data.charges:
+                raw_charges = [
+                    {
+                        "chargeStartDate":               getattr(c, "chargeStartDate", None),
+                        "chargeEndDate":                 getattr(c, "chargeEndDate", None),
+                        "chargeDuration":                getattr(c, "chargeDuration", None),
+                        "chargeStartBatteryLevel":       getattr(c, "chargeStartBatteryLevel", None),
+                        "chargeEndBatteryLevel":         getattr(c, "chargeEndBatteryLevel", None),
+                        "chargeBatteryLevelRecovered":   getattr(c, "chargeBatteryLevelRecovered", None),
+                        "chargePower":                   getattr(c, "chargePower", None),
+                        "chargeStartInstantaneousPower": getattr(c, "chargeStartInstantaneousPower", None),
+                        "chargeEndStatus":               getattr(c, "chargeEndStatus", None),
+                    }
+                    for c in data.charges
+                ]
 
-            # Neueste zuerst sortieren
             raw_charges.sort(
                 key=lambda x: x.get("chargeStartDate", "") or "", reverse=True
             )
 
             result: dict[str, Any] = {
-                "charges_raw": raw_charges,
+                "charges_raw":   raw_charges,
                 "charges_count": len(raw_charges),
             }
 
-            # Letzten N Ladevorgänge als strukturierte Daten
             for i, charge in enumerate(raw_charges[: self._last_n_charges]):
                 prefix = f"charge_{i:02d}"
                 result[f"{prefix}_start"]         = charge.get("chargeStartDate")
@@ -234,7 +205,6 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
                 result[f"{prefix}_power_w"]       = charge.get("chargeStartInstantaneousPower")
                 result[f"{prefix}_status"]        = charge.get("chargeEndStatus")
 
-            # Letzter Ladevorgang als Top-Level Sensoren
             if raw_charges:
                 last = raw_charges[0]
                 result["last_charge_start"]         = last.get("chargeStartDate")
@@ -257,18 +227,17 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
         try:
             start = datetime.now(timezone.utc) - timedelta(days=self._history_days)
             end   = datetime.now(timezone.utc)
-            data  = await vehicle.get_charge_history(start=start, end=end)
+            # period="day" ist Pflichtparameter
+            data  = await vehicle.get_charge_history(start=start, end=end, period="day")
 
             summaries = []
-            if hasattr(data, "raw_data"):
-                summaries = data.raw_data.get("attributes", {}).get("chargeSummaries", [])
-            elif hasattr(data, "chargeSummaries") and data.chargeSummaries:
+            if hasattr(data, "chargeSummaries") and data.chargeSummaries:
                 summaries = [
                     {
-                        "day":                  s.day,
-                        "totalChargesNumber":   s.totalChargesNumber,
-                        "totalChargesDuration": s.totalChargesDuration,
-                        "totalChargesErrors":   s.totalChargesErrors,
+                        "day":                  getattr(s, "day", None),
+                        "totalChargesNumber":   getattr(s, "totalChargesNumber", 0),
+                        "totalChargesDuration": getattr(s, "totalChargesDuration", 0),
+                        "totalChargesErrors":   getattr(s, "totalChargesErrors", 0),
                     }
                     for s in data.chargeSummaries
                 ]
@@ -280,16 +249,32 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
             total_duration = sum(s.get("totalChargesDuration", 0) for s in summaries)
 
             return {
-                "charge_history_raw":       summaries,
-                "charge_sessions_total":    total_sessions,
-                "charge_errors_total":      total_errors,
-                "charge_duration_total_h":  round(total_duration / 60, 1) if total_duration else 0,
+                "charge_history_raw":      summaries,
+                "charge_sessions_total":   total_sessions,
+                "charge_errors_total":     total_errors,
+                "charge_duration_total_h": round(total_duration / 60, 1) if total_duration else 0,
             }
         except Exception as e:
             log.warning("charge-history fehlgeschlagen: %s", e)
             return {}
 
-    # ── Static Endpunkte ──────────────────────────────────────────────────────
+    # ── Static Endpunkte (werden bei nicht-unterstützten Modellen still ignoriert) ──
+
+    async def _fetch_lock_status(self, vehicle: RenaultVehicle) -> dict[str, Any]:
+        try:
+            data = await vehicle.get_lock_status()
+            return {
+                "lock_status":   self._safe_get(data, "lockStatus"),
+                "door_driver":   self._safe_get(data, "doorStatusDriver"),
+                "door_passenger": self._safe_get(data, "doorStatusPassenger"),
+                "door_rear_left": self._safe_get(data, "doorStatusRearLeft"),
+                "door_rear_right": self._safe_get(data, "doorStatusRearRight"),
+                "hatch_status":  self._safe_get(data, "hatchStatus"),
+                "lock_updated":  self._safe_get(data, "lastUpdateTime"),
+            }
+        except Exception as e:
+            log.debug("lock-status nicht verfügbar: %s", e)
+            return {}
 
     async def _fetch_pressure(self, vehicle: RenaultVehicle) -> dict[str, Any]:
         try:
@@ -305,7 +290,7 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
                 "tyre_rr_status":   self._safe_get(data, "rrStatus"),
             }
         except Exception as e:
-            log.warning("pressure fehlgeschlagen: %s", e)
+            log.debug("pressure nicht verfügbar: %s", e)
             return {}
 
     async def _fetch_res_state(self, vehicle: RenaultVehicle) -> dict[str, Any]:
@@ -316,17 +301,15 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
                 "res_state_details": self._safe_get(data, "details"),
             }
         except Exception as e:
-            log.warning("res-state fehlgeschlagen: %s", e)
+            log.debug("res-state nicht verfügbar: %s", e)
             return {}
 
     # ── Hauptupdate ───────────────────────────────────────────────────────────
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Wird vom Coordinator automatisch aufgerufen."""
         try:
             vehicle = await self._ensure_vehicle()
         except Exception as e:
-            # Bei Auth-Fehler Handle zurücksetzen → nächster Versuch macht Re-Login
             self._vehicle = None
             self._client = None
             raise UpdateFailed(f"Renault Login fehlgeschlagen: {e}") from e
@@ -334,35 +317,29 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
         result: dict[str, Any] = {}
 
         # ── Realtime (jedes Mal) ──────────────────────────────────────────────
-        realtime_tasks = [
+        realtime_results = await asyncio.gather(
             self._fetch_battery_status(vehicle),
             self._fetch_location(vehicle),
-            self._fetch_lock_status(vehicle),
             self._fetch_hvac_status(vehicle),
-        ]
-        realtime_results = await asyncio.gather(*realtime_tasks, return_exceptions=True)
+            return_exceptions=True,
+        )
         for res in realtime_results:
             if isinstance(res, dict):
                 result.update(res)
-            elif isinstance(res, Exception):
-                log.warning("Realtime-Fetch Fehler: %s", res)
 
         # ── History (alle 6 Stunden) ──────────────────────────────────────────
         if self._needs_history_update():
             log.debug("Renault Extended: Fetching history data...")
-            history_tasks = [
+            history_results = await asyncio.gather(
                 self._fetch_cockpit(vehicle),
                 self._fetch_charges(vehicle),
                 self._fetch_charge_history(vehicle),
-            ]
-            history_results = await asyncio.gather(*history_tasks, return_exceptions=True)
+                return_exceptions=True,
+            )
             new_history: dict[str, Any] = {}
             for res in history_results:
                 if isinstance(res, dict):
                     new_history.update(res)
-                elif isinstance(res, Exception):
-                    log.warning("History-Fetch Fehler: %s", res)
-
             if new_history:
                 self._history_data = new_history
                 self._last_history_update = datetime.now(timezone.utc)
@@ -372,18 +349,16 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
         # ── Static (alle 24 Stunden) ──────────────────────────────────────────
         if self._needs_static_update():
             log.debug("Renault Extended: Fetching static data...")
-            static_tasks = [
+            static_results = await asyncio.gather(
+                self._fetch_lock_status(vehicle),
                 self._fetch_pressure(vehicle),
                 self._fetch_res_state(vehicle),
-            ]
-            static_results = await asyncio.gather(*static_tasks, return_exceptions=True)
+                return_exceptions=True,
+            )
             new_static: dict[str, Any] = {}
             for res in static_results:
                 if isinstance(res, dict):
                     new_static.update(res)
-                elif isinstance(res, Exception):
-                    log.warning("Static-Fetch Fehler: %s", res)
-
             if new_static:
                 self._static_data = new_static
                 self._last_static_update = datetime.now(timezone.utc)

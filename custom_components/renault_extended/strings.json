@@ -1,0 +1,47 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Renault Extended – Anmeldung",
+        "description": "Bitte gib deine MyRenault-Zugangsdaten ein.",
+        "data": {
+          "username": "E-Mail-Adresse",
+          "password": "Passwort",
+          "locale": "Locale (z.B. de_DE)"
+        }
+      },
+      "account": {
+        "title": "Kamereon-Konto wählen",
+        "data": {
+          "account_id": "Konto-ID"
+        }
+      },
+      "vehicle": {
+        "title": "Fahrzeug wählen",
+        "data": {
+          "vin": "Fahrzeug (VIN)"
+        }
+      }
+    },
+    "error": {
+      "invalid_credentials": "Ungültige Zugangsdaten. Bitte prüfe E-Mail und Passwort.",
+      "cannot_connect": "Verbindung fehlgeschlagen. Bitte Internetverbindung prüfen.",
+      "no_vehicles": "Keine Fahrzeuge im Konto gefunden.",
+      "unknown": "Unbekannter Fehler. Bitte versuche es erneut."
+    },
+    "abort": {
+      "already_configured": "Dieses Fahrzeug ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Renault Extended – Einstellungen",
+        "data": {
+          "history_days": "Ladehistorie: Anzahl Tage",
+          "last_n_charges": "Anzahl einzelner Ladevorgänge als Sensoren"
+        }
+      }
+    }
+  }
+}

@@ -255,7 +255,7 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
                 "charge_duration_total_h": round(total_duration / 60, 1) if total_duration else 0,
             }
         except Exception as e:
-            log.warning("charge-history fehlgeschlagen: %s", e)
+            log.debug("charge-history nicht verfügbar: %s", e)
             return {}
 
     # ── Static Endpunkte (werden bei nicht-unterstützten Modellen still ignoriert) ──
@@ -367,3 +367,41 @@ class RenaultDataCoordinator(DataUpdateCoordinator):
 
         log.debug("Renault Extended: Update abgeschlossen, %d Datenpunkte", len(result))
         return result
+
+    # ── Actions (Steuerung) ───────────────────────────────────────────────────
+
+    async def action_charge_start(self) -> None:
+        """Ladevorgang starten."""
+        try:
+            vehicle = await self._ensure_vehicle()
+            await vehicle.set_charge_start()
+            log.info("Renault Extended: Ladevorgang gestartet")
+        except Exception as e:
+            log.error("Laden starten fehlgeschlagen: %s", e)
+
+    async def action_hvac_start(self) -> None:
+        """Klimaanlage starten."""
+        try:
+            vehicle = await self._ensure_vehicle()
+            await vehicle.set_hvac_start(target_temperature=21)
+            log.info("Renault Extended: Klimaanlage gestartet")
+        except Exception as e:
+            log.error("Klimaanlage starten fehlgeschlagen: %s", e)
+
+    async def action_hvac_stop(self) -> None:
+        """Klimaanlage stoppen."""
+        try:
+            vehicle = await self._ensure_vehicle()
+            await vehicle.set_hvac_stop()
+            log.info("Renault Extended: Klimaanlage gestoppt")
+        except Exception as e:
+            log.error("Klimaanlage stoppen fehlgeschlagen: %s", e)
+
+    async def action_set_charge_mode(self, mode: str) -> None:
+        """Lademodus setzen (always / scheduled)."""
+        try:
+            vehicle = await self._ensure_vehicle()
+            await vehicle.set_charge_mode(charge_mode=mode)
+            log.info("Renault Extended: Lademodus gesetzt auf %s", mode)
+        except Exception as e:
+            log.error("Lademodus setzen fehlgeschlagen: %s", e)
